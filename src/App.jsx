@@ -1,39 +1,41 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
-import { 
-  getAuth, 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  signOut, 
-  onAuthStateChanged, 
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
   updateProfile,
   sendPasswordResetEmail
 } from 'firebase/auth';
-import { 
-  getFirestore, 
-  collection, 
-  addDoc, 
-  query, 
-  where, 
-  orderBy, 
-  onSnapshot, 
-  serverTimestamp, 
-  limit, 
-  doc, 
-  setDoc 
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  serverTimestamp,
+  limit,
+  doc,
+  setDoc,
+  getDocs,
+  deleteDoc
 } from 'firebase/firestore';
-import { 
-  Wifi, WifiOff, QrCode, CheckCircle, LogOut, History, MapPin, 
-  Loader2, ShieldCheck, Smartphone, CalendarDays, Users, 
-  LayoutDashboard, RefreshCw, Globe, Lock 
+import {
+  Wifi, WifiOff, QrCode, CheckCircle, LogOut, History, MapPin,
+  Loader2, ShieldCheck, Smartphone, CalendarDays, Users,
+  LayoutDashboard, RefreshCw, Globe, Lock
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
+import { Html5Qrcode } from 'html5-qrcode';
 
 // --- CONFIGURATION ---
 const SCHOOL_NAME = "PragatiPath Academy";
 
 // --- 1. FIREBASE CONFIG ---
-// NOTE: Even if you renamed the project to "PragatiPath Academy" in settings,
-// the projectId and domains below MUST remain "school-b1f8e" to work.
 const firebaseConfig = {
   apiKey: "AIzaSyAcFRmDU0bGA8i0HxYGtAlZKpTDVK1nDM4",
   authDomain: "school-b1f8e.firebaseapp.com",
@@ -50,11 +52,11 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 // We keep this stable so your data doesn't disappear
-const appId = 'school-attendance-v1'; 
+const appId = 'school-attendance-v2';
 
 // --- Shared Components ---
 
-const Button = ({ children, onClick, variant = 'primary', className = '', disabled = false, type="button" }) => {
+const Button = ({ children, onClick, variant = 'primary', className = '', disabled = false, type = "button" }) => {
   const baseStyle = "px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center justify-center gap-2 shadow-sm active:scale-95";
   const variants = {
     primary: "bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed",
@@ -65,9 +67,9 @@ const Button = ({ children, onClick, variant = 'primary', className = '', disabl
   };
 
   return (
-    <button 
+    <button
       type={type}
-      onClick={onClick} 
+      onClick={onClick}
       disabled={disabled}
       className={`${baseStyle} ${variants[variant]} ${className}`}
     >
@@ -93,13 +95,13 @@ const Input = ({ label, type, value, onChange, placeholder, required = false }) 
 // --- Main App Component ---
 
 export default function AttendanceApp() {
-  const [user, setUser] = useState(null); 
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAdminMode, setIsAdminMode] = useState(false);
-  
+
   const [currentIP, setCurrentIP] = useState(null);
   const [allowedSchoolIP, setAllowedSchoolIP] = useState(null);
-  
+
   // Login Form States
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
@@ -183,7 +185,7 @@ export default function AttendanceApp() {
       setAuthError("Please enter your email address above to reset your password.");
       return;
     }
-    
+
     setLoading(true);
     try {
       await sendPasswordResetEmail(auth, email);
@@ -230,24 +232,24 @@ export default function AttendanceApp() {
 
           <form onSubmit={handleAuthAction}>
             {!isLogin && (
-              <Input 
-                label="Full Name" 
-                type="text" 
-                placeholder="John Doe" 
-                value={fullName} 
-                onChange={(e) => setFullName(e.target.value)} 
-                required 
+              <Input
+                label="Full Name"
+                type="text"
+                placeholder="John Doe"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                required
               />
             )}
-            <Input 
-              label="Email Address" 
-              type="email" 
-              placeholder="teacher@school.edu" 
-              value={email} 
-              onChange={(e) => setEmail(e.target.value)} 
-              required 
+            <Input
+              label="Email Address"
+              type="email"
+              placeholder="teacher@school.edu"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
             />
-            
+
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
               <input
@@ -260,8 +262,8 @@ export default function AttendanceApp() {
               />
               {isLogin && (
                 <div className="flex justify-end mt-1">
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={handleForgotPassword}
                     className="text-xs text-blue-600 hover:text-blue-800 hover:underline"
                   >
@@ -270,13 +272,13 @@ export default function AttendanceApp() {
                 </div>
               )}
             </div>
-            
+
             {authError && (
               <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-4 border border-red-100">
                 {authError}
               </div>
             )}
-            
+
             {successMessage && (
               <div className="bg-green-50 text-green-600 p-3 rounded-lg text-sm mb-4 border border-green-100 flex items-center gap-2">
                 <CheckCircle className="w-4 h-4" /> {successMessage}
@@ -300,19 +302,19 @@ export default function AttendanceApp() {
   }
 
   return isAdminMode ? (
-    <AdminDashboard 
-      user={user} 
-      onLogout={handleLogout} 
-      appId={appId} 
+    <AdminDashboard
+      user={user}
+      onLogout={handleLogout}
+      appId={appId}
       currentIP={currentIP}
       allowedSchoolIP={allowedSchoolIP}
     />
   ) : (
-    <TeacherDashboard 
-      user={user} 
-      onLogout={handleLogout} 
-      appId={appId} 
-      currentIP={currentIP} 
+    <TeacherDashboard
+      user={user}
+      onLogout={handleLogout}
+      appId={appId}
+      currentIP={currentIP}
       allowedSchoolIP={allowedSchoolIP}
       fetchIP={fetchIP}
     />
@@ -343,12 +345,12 @@ const AdminDashboard = ({ user, onLogout, appId, currentIP, allowedSchoolIP }) =
             <LogOut className="w-5 h-5 text-slate-400" />
           </button>
         </div>
-        
+
         <div className="max-w-4xl mx-auto px-4 flex gap-6 text-sm font-medium mt-2 overflow-x-auto">
-          <TabButton active={activeTab === 'qr'} onClick={() => setActiveTab('qr')} icon={<QrCode size={16}/>} label="QR Code" />
-          <TabButton active={activeTab === 'network'} onClick={() => setActiveTab('network')} icon={<Globe size={16}/>} label="Network" />
-          <TabButton active={activeTab === 'daily'} onClick={() => setActiveTab('daily')} icon={<Users size={16}/>} label="Daily Log" />
-          <TabButton active={activeTab === 'monthly'} onClick={() => setActiveTab('monthly')} icon={<CalendarDays size={16}/>} label="Reports" />
+          <TabButton active={activeTab === 'qr'} onClick={() => setActiveTab('qr')} icon={<QrCode size={16} />} label="QR Code" />
+          <TabButton active={activeTab === 'network'} onClick={() => setActiveTab('network')} icon={<Globe size={16} />} label="Network" />
+          <TabButton active={activeTab === 'daily'} onClick={() => setActiveTab('daily')} icon={<Users size={16} />} label="Daily Log" />
+          <TabButton active={activeTab === 'monthly'} onClick={() => setActiveTab('monthly')} icon={<CalendarDays size={16} />} label="Reports" />
         </div>
       </div>
 
@@ -363,7 +365,7 @@ const AdminDashboard = ({ user, onLogout, appId, currentIP, allowedSchoolIP }) =
 };
 
 const TabButton = ({ active, onClick, icon, label }) => (
-  <button 
+  <button
     onClick={onClick}
     className={`flex items-center gap-2 pb-3 border-b-2 transition-colors whitespace-nowrap ${active ? 'border-blue-500 text-white' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
   >
@@ -391,7 +393,7 @@ const AdminNetworkConfig = ({ appId, currentIP, allowedSchoolIP }) => {
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <div className="mb-6 border-b border-gray-100 pb-4">
         <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-          <Globe className="w-6 h-6 text-blue-600" /> 
+          <Globe className="w-6 h-6 text-blue-600" />
           Network Security Configuration
         </h2>
         <p className="text-gray-500 mt-1 text-sm">Define the authorized network for attendance.</p>
@@ -427,9 +429,9 @@ const AdminNetworkConfig = ({ appId, currentIP, allowedSchoolIP }) => {
               )}
             </div>
             <div className="mt-4 text-sm text-green-800">
-               {allowedSchoolIP === currentIP 
-                 ? "✅ You are connected to the allowed network." 
-                 : "⚠️ Your current IP does not match the whitelist."}
+              {allowedSchoolIP === currentIP
+                ? "✅ You are connected to the allowed network."
+                : "⚠️ Your current IP does not match the whitelist."}
             </div>
           </div>
         </div>
@@ -481,15 +483,21 @@ const AdminQRGenerator = ({ appId }) => {
       <div className="w-full max-w-lg">
         <h2 className="text-2xl font-bold text-gray-800 mb-2">Daily Attendance QR</h2>
         <p className="text-gray-500 mb-8">Project this screen. Teachers must be on School WiFi to scan.</p>
-        
+
         {loading ? (
           <div className="h-64 flex items-center justify-center">
             <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
           </div>
         ) : todayCode ? (
           <div className="bg-blue-50 border-4 border-blue-100 rounded-3xl p-10 mb-6 shadow-xl">
-            <div className="mb-6 relative">
-              <QrCode className="w-64 h-64 mx-auto text-gray-900" />
+            <div className="mb-6 relative flex justify-center">
+              <QRCodeSVG
+                value={JSON.stringify({ type: 'school_attendance', code: todayCode.code })}
+                size={256}
+                level="H"
+                includeMargin={true}
+                className="mx-auto"
+              />
             </div>
             <div className="bg-white border border-blue-200 rounded-lg py-3 px-6 inline-block shadow-sm">
               <span className="text-sm text-gray-400 font-bold uppercase tracking-wider block text-xs mb-1">Today's Security Code</span>
@@ -518,7 +526,7 @@ const AdminDailyReport = ({ appId }) => {
     const today = new Date().toLocaleDateString();
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'attendance'), orderBy('timestamp', 'desc'), limit(100));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const all = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
+      const all = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       setRecords(all.filter(r => r.dateString === today));
     });
     return () => unsubscribe();
@@ -545,7 +553,7 @@ const AdminDailyReport = ({ appId }) => {
               {records.map(record => (
                 <tr key={record.id} className="hover:bg-gray-50/50">
                   <td className="px-6 py-4 font-medium text-gray-900">{record.userName}</td>
-                  <td className="px-6 py-4 text-gray-600">{record.timestamp?.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+                  <td className="px-6 py-4 text-gray-600">{record.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
                   <td className="px-6 py-4 font-mono text-gray-400 text-xs">{record.ipAddress}</td>
                   <td className="px-6 py-4 text-right"><span className="text-green-600 bg-green-50 px-2 py-1 rounded-md text-xs font-medium border border-green-100">Verified</span></td>
                 </tr>
@@ -571,7 +579,7 @@ const AdminMonthlyReport = ({ appId }) => {
         if (!userStats[r.userId]) userStats[r.userId] = { name: r.userName, days: 0 };
         userStats[r.userId].days += 1;
       });
-      setStats(Object.values(userStats).sort((a,b) => b.days - a.days));
+      setStats(Object.values(userStats).sort((a, b) => b.days - a.days));
     });
     return () => unsubscribe();
   }, [appId, selectedMonth]);
@@ -606,7 +614,7 @@ const TeacherDashboard = ({ user, onLogout, appId, currentIP, allowedSchoolIP, f
         <div className="max-w-md mx-auto flex justify-between items-center">
           <div>
             <h1 className="font-bold text-gray-800">{SCHOOL_NAME}</h1>
-            <p className="text-xs text-gray-500">{new Date().toLocaleDateString(undefined, {weekday:'long', month:'long', day:'numeric'})}</p>
+            <p className="text-xs text-gray-500">{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
           </div>
           <button onClick={onLogout} className="p-2 text-gray-400 hover:text-red-500 transition-colors">
             <LogOut className="w-5 h-5" />
@@ -619,10 +627,10 @@ const TeacherDashboard = ({ user, onLogout, appId, currentIP, allowedSchoolIP, f
 
         <div className="mt-6">
           {activeTab === 'mark' && (
-            <AttendanceMarker 
-              user={user} 
-              currentIP={currentIP} 
-              allowedSchoolIP={allowedSchoolIP} 
+            <AttendanceMarker
+              user={user}
+              currentIP={currentIP}
+              allowedSchoolIP={allowedSchoolIP}
               appId={appId}
             />
           )}
@@ -630,9 +638,11 @@ const TeacherDashboard = ({ user, onLogout, appId, currentIP, allowedSchoolIP, f
             <AttendanceHistory user={user} appId={appId} />
           )}
           {activeTab === 'settings' && (
-            <Settings 
-              currentIP={currentIP} 
+            <Settings
+              currentIP={currentIP}
               fetchIP={fetchIP}
+              user={user}
+              appId={appId}
             />
           )}
         </div>
@@ -656,7 +666,7 @@ const NavButton = ({ icon, label, isActive, onClick }) => (
 
 const NetworkStatusBanner = ({ currentIP, allowedSchoolIP, refreshIP }) => {
   const isConnected = allowedSchoolIP && currentIP === allowedSchoolIP;
-  
+
   return (
     <div className={`rounded-xl p-4 flex items-center justify-between shadow-sm border ${isConnected ? 'bg-green-50 border-green-100' : 'bg-amber-50 border-amber-100'}`}>
       <div className="flex items-center gap-3">
@@ -680,34 +690,36 @@ const NetworkStatusBanner = ({ currentIP, allowedSchoolIP, refreshIP }) => {
 };
 
 const AttendanceMarker = ({ user, currentIP, allowedSchoolIP, appId }) => {
-  const [status, setStatus] = useState('idle'); 
+  const [status, setStatus] = useState('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [todayRecord, setTodayRecord] = useState(null);
   const [dailyCode, setDailyCode] = useState(null);
+  const [cameraPermissionError, setCameraPermissionError] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     const qCode = query(collection(db, 'artifacts', appId, 'public', 'data', 'daily_codes'), orderBy('timestamp', 'desc'), limit(1));
     const unsubCode = onSnapshot(qCode, (snap) => {
-        if(!snap.empty) {
-            const data = snap.docs[0].data();
-            if(data.dateString === new Date().toLocaleDateString()) {
-                setDailyCode(data);
-            } else {
-                setDailyCode(null);
-            }
+      if (!snap.empty) {
+        const data = snap.docs[0].data();
+        if (data.dateString === new Date().toLocaleDateString()) {
+          setDailyCode(data);
+        } else {
+          setDailyCode(null);
         }
+      }
     });
 
     const todayStr = new Date().toLocaleDateString();
     const qAttendance = query(collection(db, 'artifacts', appId, 'public', 'data', 'attendance'), where('userId', '==', user.uid));
     const unsubAtt = onSnapshot(qAttendance, (snap) => {
-        const myRecs = snap.docs.map(d => d.data());
-        myRecs.sort((a,b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)); 
-        const found = myRecs.find(r => r.dateString === todayStr);
-        if (found) {
-            setTodayRecord(found);
-            setStatus('success');
-        }
+      const myRecs = snap.docs.map(d => d.data());
+      myRecs.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+      const found = myRecs.find(r => r.dateString === todayStr);
+      if (found) {
+        setTodayRecord(found);
+        setStatus('success');
+      }
     });
 
     return () => { unsubCode(); unsubAtt(); };
@@ -715,25 +727,73 @@ const AttendanceMarker = ({ user, currentIP, allowedSchoolIP, appId }) => {
 
   const handleScan = () => {
     if (!allowedSchoolIP) {
-        setStatus('error');
-        setErrorMessage("System Setup Error: Admin has not configured the School WiFi IP yet.");
-        return;
-    }
-
-    if (currentIP !== allowedSchoolIP) {
-      setStatus('error');
-      setErrorMessage("Network Access Denied: You must be connected to the School WiFi.");
-      return;
-    }
-
-    if (!dailyCode) {
-        setStatus('error');
-        setErrorMessage("No active QR Code found. Please wait for Admin to generate one.");
-        return;
     }
 
     setStatus('scanning');
-    setTimeout(() => { processAttendance(); }, 2000);
+    setCameraPermissionError(false);
+  };
+
+  useEffect(() => {
+    let html5QrCode = null;
+
+    if (status === 'scanning') {
+      const startScanner = async () => {
+        try {
+          html5QrCode = new Html5Qrcode("reader");
+          await html5QrCode.start(
+            { facingMode: "environment" },
+            {
+              fps: 10,
+              qrbox: { width: 250, height: 250 }
+            },
+            (decodedText) => {
+              // Success callback
+              try {
+                const data = JSON.parse(decodedText);
+                if (data.type === 'school_attendance' && data.code) {
+                  handleVerify(data.code);
+                } else {
+                  handleVerify(decodedText);
+                }
+              } catch (e) {
+                handleVerify(decodedText);
+              }
+              // Stop scanning after success
+              html5QrCode.stop().then(() => {
+                html5QrCode.clear();
+              }).catch(err => console.error("Failed to stop scanner", err));
+            },
+            (errorMessage) => {
+              // parse error, ignore it.
+            }
+          );
+        } catch (err) {
+          console.error("Error starting scanner", err);
+          setCameraPermissionError(true);
+          setStatus('idle');
+        }
+      };
+
+      // Small delay to ensure DOM is ready
+      setTimeout(startScanner, 100);
+    }
+
+    return () => {
+      if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().then(() => {
+          html5QrCode.clear();
+        }).catch(err => console.error("Failed to stop scanner on cleanup", err));
+      }
+    };
+  }, [status]);
+
+  const handleVerify = (scannedCode) => {
+    if (scannedCode === dailyCode.code) {
+      processAttendance();
+    } else {
+      setStatus('error');
+      setErrorMessage("Invalid QR Code. Please try again.");
+    }
   };
 
   const processAttendance = async () => {
@@ -755,6 +815,20 @@ const AttendanceMarker = ({ user, currentIP, allowedSchoolIP, appId }) => {
     }
   };
 
+  const handleReset = async () => {
+    if (!confirm("Reset attendance to test scanning again?")) return;
+    setResetting(true);
+    try {
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', todayRecord.id));
+      setTodayRecord(null);
+      setStatus('idle');
+    } catch (e) {
+      console.error(e);
+      alert("Failed to reset: " + e.message);
+    }
+    setResetting(false);
+  };
+
   if (todayRecord) {
     return (
       <div className="flex flex-col items-center justify-center py-10 text-center animate-in fade-in zoom-in duration-500">
@@ -768,9 +842,16 @@ const AttendanceMarker = ({ user, currentIP, allowedSchoolIP, appId }) => {
             <span className="font-medium text-gray-800">{todayRecord.timestamp?.toDate().toLocaleTimeString()}</span>
           </div>
           <div className="flex justify-between text-sm">
-             <span className="text-gray-500">Code:</span>
-             <span className="font-mono bg-gray-100 px-2 rounded text-xs py-0.5">{todayRecord.qrCodeUsed || 'STATIC'}</span>
+            <span className="text-gray-500">Code:</span>
+            <span className="font-mono bg-gray-100 px-2 rounded text-xs py-0.5">{todayRecord.qrCodeUsed || 'STATIC'}</span>
           </div>
+        </div>
+
+        <div className="mt-8">
+          <Button variant="ghost" onClick={handleReset} disabled={resetting} className="text-xs text-gray-400 hover:text-red-500">
+            {resetting ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+            Test Mode: Reset & Scan Again
+          </Button>
         </div>
       </div>
     );
@@ -778,12 +859,22 @@ const AttendanceMarker = ({ user, currentIP, allowedSchoolIP, appId }) => {
 
   return (
     <div className="flex flex-col items-center">
+      {cameraPermissionError && (
+        <div className="w-full bg-red-50 border border-red-100 p-4 rounded-xl mb-6 text-center">
+          <p className="text-red-600 font-bold mb-1">Camera Access Denied</p>
+          <p className="text-xs text-red-500">
+            Please allow camera permissions in your browser settings. <br />
+            Note: Camera only works on HTTPS or Localhost.
+          </p>
+        </div>
+      )}
+
       {status === 'idle' && (
         <>
           <div className="w-full bg-blue-50 border border-blue-100 rounded-2xl p-8 mb-6 flex flex-col items-center justify-center aspect-square max-h-80 relative">
             <QrCode className="w-32 h-32 text-blue-300 mb-4 opacity-50" />
             <p className="text-center text-blue-800 font-medium z-10">
-               Locate the QR Code on the<br/>Admin Screen
+              Locate the QR Code on the<br />Admin Screen
             </p>
           </div>
           <Button onClick={handleScan} className="w-full py-4 text-lg shadow-lg shadow-blue-200">
@@ -794,13 +885,15 @@ const AttendanceMarker = ({ user, currentIP, allowedSchoolIP, appId }) => {
       )}
 
       {status === 'scanning' && (
-        <div className="w-full bg-black rounded-2xl aspect-[3/4] flex flex-col items-center justify-center relative overflow-hidden">
-           <div className="absolute inset-0 bg-gray-800 animate-pulse"></div>
-           <div className="z-10 w-64 h-64 border-2 border-white/50 rounded-lg flex items-center justify-center">
-              <div className="w-60 h-0.5 bg-red-500 shadow-[0_0_10px_rgba(255,0,0,0.8)] animate-[scan_2s_ease-in-out_infinite]"></div>
-           </div>
-           <p className="z-10 text-white mt-8 font-medium">Align QR Code within frame</p>
-           <style>{`@keyframes scan { 0% { transform: translateY(-100px); opacity: 0; } 50% { opacity: 1; } 100% { transform: translateY(100px); opacity: 0; } }`}</style>
+        <div className="w-full bg-black rounded-2xl overflow-hidden relative">
+          <div id="reader" className="w-full h-64 bg-black"></div>
+          <Button
+            onClick={() => setStatus('idle')}
+            variant="secondary"
+            className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 opacity-80 hover:opacity-100"
+          >
+            Cancel Scan
+          </Button>
         </div>
       )}
 
@@ -835,7 +928,7 @@ const AttendanceHistory = ({ user, appId }) => {
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       let rawRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      rawRecords.sort((a,b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)); 
+      rawRecords.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
       rawRecords = rawRecords.slice(0, 50);
 
       const groups = {};
@@ -871,13 +964,13 @@ const AttendanceHistory = ({ user, appId }) => {
             {groupedRecords[month].map((record, index) => (
               <div key={record.id} className={`p-4 flex justify-between items-center ${index !== groupedRecords[month].length - 1 ? 'border-b border-gray-50' : ''}`}>
                 <div>
-                   <p className="font-medium text-gray-800 text-sm">
-                     {record.timestamp?.toDate().toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' })}
-                   </p>
+                  <p className="font-medium text-gray-800 text-sm">
+                    {record.timestamp?.toDate().toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' })}
+                  </p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-semibold text-blue-600">
-                    {record.timestamp?.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    {record.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
               </div>
@@ -889,14 +982,37 @@ const AttendanceHistory = ({ user, appId }) => {
   );
 };
 
-const Settings = ({ currentIP, fetchIP }) => {
+const Settings = ({ currentIP, fetchIP, user, appId }) => {
+  const [resetting, setResetting] = useState(false);
+
+  const handleResetAttendance = async () => {
+    if (!confirm("Are you sure? This will delete your attendance record for today so you can test scanning again.")) return;
+    setResetting(true);
+    try {
+      const today = new Date().toLocaleDateString();
+      const q = query(
+        collection(db, 'artifacts', appId, 'public', 'data', 'attendance'),
+        where('userId', '==', user.uid),
+        where('dateString', '==', today)
+      );
+      const snapshot = await getDocs(q);
+      const deletePromises = snapshot.docs.map(d => deleteDoc(d.ref));
+      await Promise.all(deletePromises);
+      alert("Attendance reset! Go back to the Attend tab to scan again.");
+    } catch (e) {
+      console.error(e);
+      alert("Failed to reset: " + e.message);
+    }
+    setResetting(false);
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-bold text-gray-800 mb-2">Debug Settings</h2>
         <p className="text-sm text-gray-500 mb-4">
-            Use this to spoof your current IP for testing. <br/>
-            (Note: You cannot change the School IP here anymore; only Admin can do that).
+          Use this to spoof your current IP for testing. <br />
+          (Note: You cannot change the School IP here anymore; only Admin can do that).
         </p>
       </div>
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 space-y-4">
@@ -910,10 +1026,15 @@ const Settings = ({ currentIP, fetchIP }) => {
       </div>
       <div className="grid gap-3">
         <Button onClick={() => { localStorage.setItem('mock_current_ip', "192.168.1.100"); fetchIP(); }}>
-            Spoof IP to "192.168.1.100"
+          Spoof IP to "192.168.1.100"
         </Button>
         <Button variant="secondary" onClick={() => { localStorage.removeItem('mock_current_ip'); fetchIP(); }}>
-            Reset to Real IP
+          Reset to Real IP
+        </Button>
+        <div className="h-px bg-gray-200 my-2"></div>
+        <Button variant="danger" onClick={handleResetAttendance} disabled={resetting}>
+          {resetting ? <Loader2 className="animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+          Reset Today's Attendance
         </Button>
       </div>
     </div>
