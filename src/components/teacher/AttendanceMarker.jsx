@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, orderBy, limit, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, getDocs } from 'firebase/firestore';
 import { Html5Qrcode } from 'html5-qrcode';
 import { QrCode, CheckCircle, Loader2, WifiOff, Smartphone, RefreshCw } from 'lucide-react';
 import { db } from '../../config/firebase';
@@ -151,7 +151,7 @@ const AttendanceMarker = ({ user, currentIP, allowedSchoolIP }) => {
                 where('userId', '==', user.uid),
                 where('dateString', '==', today)
             );
-            const snapshot = await (await import('firebase/firestore')).getDocs(q);
+            const snapshot = await getDocs(q);
             const deletePromises = snapshot.docs.map(d => deleteDoc(d.ref));
             await Promise.all(deletePromises);
             setTodayRecord(null);
