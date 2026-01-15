@@ -3,25 +3,31 @@ import { collection, query, orderBy, limit, onSnapshot, addDoc, serverTimestamp 
 import { QRCodeSVG } from 'qrcode.react';
 import { Loader2, RefreshCw, CheckCircle } from 'lucide-react';
 import { db } from '../../config/firebase';
-import { APP_ID } from '../../utils/constants';
+import { getTodayDateString } from '../../utils/dateUtils';
 import Button from '../shared/Button';
 
 const AdminQRGenerator = () => {
     const [todayCode, setTodayCode] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
     useEffect(() => {
         const q = query(
-            collection(db, 'artifacts', APP_ID, 'public', 'data', 'daily_codes'),
+            collection(db, 'daily_codes'),
             orderBy('timestamp', 'desc'),
             limit(5)
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const codes = snapshot.docs.map(d => d.data());
-            const today = new Date().toLocaleDateString();
+            const today = getTodayDateString();
             const existing = codes.find(c => c.dateString === today);
             setTodayCode(existing);
+            setLoading(false);
+            setError(null);
+        }, (err) => {
+            console.error("Firestore error:", err);
+            setError(err.message);
             setLoading(false);
         });
 
@@ -30,16 +36,18 @@ const AdminQRGenerator = () => {
 
     const generateCode = async () => {
         setLoading(true);
+        setError(null);
         const code = Math.random().toString(36).substring(2, 8).toUpperCase();
         try {
-            await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'daily_codes'), {
+            await addDoc(collection(db, 'daily_codes'), {
                 code: code,
                 timestamp: serverTimestamp(),
-                dateString: new Date().toLocaleDateString(),
+                dateString: getTodayDateString(),
                 active: true
             });
         } catch (e) {
             console.error("Error generating code", e);
+            setError(e.message);
         }
         setLoading(false);
     };
@@ -50,6 +58,16 @@ const AdminQRGenerator = () => {
                 <h2 className="text-2xl font-bold text-gray-800 mb-2">Daily Attendance QR</h2>
                 <p className="text-gray-500 mb-8">Project this screen. Teachers must be on School WiFi to scan.</p>
 
+                {error && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+                        <p className="text-red-600 text-sm font-medium mb-2">Error loading QR code</p>
+                        <p className="text-red-500 text-xs">{error}</p>
+                        <Button onClick={() => window.location.reload()} size="sm" className="mt-3 bg-red-500 hover:bg-red-600">
+                            Retry
+                        </Button>
+                    </div>
+                )}
+
                 {loading ? (
                     <div className="h-64 flex items-center justify-center">
                         <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
@@ -59,7 +77,7 @@ const AdminQRGenerator = () => {
                         <div className="mb-6 relative flex justify-center">
                             <QRCodeSVG
                                 value={JSON.stringify({ type: 'school_attendance', code: todayCode.code })}
-                                size={256}
+                                size={320}
                                 level="H"
                                 includeMargin={true}
                                 className="mx-auto"
@@ -73,7 +91,7 @@ const AdminQRGenerator = () => {
                             <CheckCircle className="w-5 h-5" /> Active for {new Date().toLocaleDateString()}
                         </p>
                     </div>
-                ) : (
+                ) : !error && (
                     <div className="py-12 border-2 border-dashed border-gray-200 rounded-2xl mb-6 bg-gray-50/50">
                         <p className="text-gray-400 mb-4">No code generated for today.</p>
                         <Button onClick={generateCode} size="lg" className="mx-auto shadow-xl shadow-blue-100">

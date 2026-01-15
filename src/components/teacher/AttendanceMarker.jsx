@@ -3,7 +3,7 @@ import { collection, query, where, orderBy, limit, onSnapshot, addDoc, serverTim
 import { Html5Qrcode } from 'html5-qrcode';
 import { QrCode, CheckCircle, Loader2, WifiOff, Smartphone, RefreshCw } from 'lucide-react';
 import { db } from '../../config/firebase';
-import { APP_ID } from '../../utils/constants';
+import { getTodayDateString } from '../../utils/dateUtils';
 import Button from '../shared/Button';
 
 const AttendanceMarker = ({ user, currentIP, allowedSchoolIP }) => {
@@ -16,25 +16,34 @@ const AttendanceMarker = ({ user, currentIP, allowedSchoolIP }) => {
 
     useEffect(() => {
         const qCode = query(
-            collection(db, 'artifacts', APP_ID, 'public', 'data', 'daily_codes'),
+            collection(db, 'daily_codes'),
             orderBy('timestamp', 'desc'),
             limit(1)
         );
 
         const unsubCode = onSnapshot(qCode, (snap) => {
+            console.log("Daily codes snapshot received, docs:", snap.docs.length);
             if (!snap.empty) {
                 const data = snap.docs[0].data();
-                if (data.dateString === new Date().toLocaleDateString()) {
+                console.log("Latest code data:", data);
+                if (data.dateString === getTodayDateString()) {
                     setDailyCode(data);
                 } else {
+                    console.log("Code is from a different day:", data.dateString, "vs", getTodayDateString());
                     setDailyCode(null);
                 }
+            } else {
+                console.log("No daily codes found");
+                setDailyCode(null);
             }
+        }, (err) => {
+            console.error("Error fetching daily codes:", err);
+            setErrorMessage("Unable to fetch QR code: " + err.message);
         });
 
-        const todayStr = new Date().toLocaleDateString();
+        const todayStr = getTodayDateString();
         const qAttendance = query(
-            collection(db, 'artifacts', APP_ID, 'public', 'data', 'attendance'),
+            collection(db, 'attendance'),
             where('userId', '==', user.uid)
         );
 
@@ -46,14 +55,19 @@ const AttendanceMarker = ({ user, currentIP, allowedSchoolIP }) => {
                 setTodayRecord(found);
                 setStatus('success');
             }
+        }, (err) => {
+            console.error("Error fetching attendance:", err);
         });
 
         return () => { unsubCode(); unsubAtt(); };
     }, [user]);
 
     const handleScan = () => {
-        if (!allowedSchoolIP) {
-            // Network not configured yet, but allow scanning
+        // Enforce school WiFi requirement
+        if (allowedSchoolIP && currentIP !== allowedSchoolIP) {
+            setStatus('error');
+            setErrorMessage(`You must be connected to school WiFi to mark attendance. Your IP: ${currentIP}, Required: ${allowedSchoolIP}`);
+            return;
         }
         setStatus('scanning');
         setCameraPermissionError(false);
@@ -66,14 +80,22 @@ const AttendanceMarker = ({ user, currentIP, allowedSchoolIP }) => {
             const startScanner = async () => {
                 try {
                     html5QrCode = new Html5Qrcode("reader");
+
+                    // Enhanced configuration for better QR detection
+                    const config = {
+                        fps: 5,  // Lower FPS for better compatibility and performance
+                        qrbox: 300,  // Larger square box for easier scanning
+                        aspectRatio: 1.0,  // Square aspect ratio
+                        disableFlip: false,  // Allow flipping for better detection
+                        verbose: true  // Enable logging for debugging
+                    };
+
                     await html5QrCode.start(
                         { facingMode: "environment" },
-                        {
-                            fps: 10,
-                            qrbox: { width: 250, height: 250 }
-                        },
+                        config,
                         (decodedText) => {
                             // Success callback
+                            console.log("QR Code detected:", decodedText);
                             try {
                                 const data = JSON.parse(decodedText);
                                 if (data.type === 'school_attendance' && data.code) {
@@ -90,11 +112,14 @@ const AttendanceMarker = ({ user, currentIP, allowedSchoolIP }) => {
                             }).catch(err => console.error("Failed to stop scanner", err));
                         },
                         (errorMessage) => {
-                            // parse error, ignore it.
+                            // Parse error - this fires constantly while scanning, so we can ignore it
                         }
                     );
+                    console.log("Scanner started successfully");
                 } catch (err) {
-                    console.error("Error starting scanner", err);
+                    console.error("Error starting scanner:", err);
+                    console.error("Error name:", err.name);
+                    console.error("Error message:", err.message);
                     setCameraPermissionError(true);
                     setStatus('idle');
                 }
@@ -114,25 +139,45 @@ const AttendanceMarker = ({ user, currentIP, allowedSchoolIP }) => {
     }, [status]);
 
     const handleVerify = (scannedCode) => {
+        console.log("Verifying scanned code:", scannedCode);
+        console.log("Expected daily code:", dailyCode);
+
+        if (!dailyCode || !dailyCode.code) {
+            setStatus('error');
+            setErrorMessage("No daily QR code available. Please ask admin to generate today's code.");
+            return;
+        }
+
         if (scannedCode === dailyCode.code) {
+            console.log("Code matched! Processing attendance...");
             processAttendance();
         } else {
+            console.log("Code mismatch. Scanned:", scannedCode, "Expected:", dailyCode.code);
             setStatus('error');
-            setErrorMessage("Invalid QR Code. Please try again.");
+            setErrorMessage(`Invalid QR Code. Scanned: "${scannedCode}" - Please scan the correct QR code.`);
         }
     };
 
     const processAttendance = async () => {
         setStatus('processing');
+
+        // Final IP verification before saving (security check)
+        if (allowedSchoolIP && currentIP !== allowedSchoolIP) {
+            setStatus('error');
+            setErrorMessage(`Network verification failed. You must be on school WiFi. Your IP: ${currentIP}`);
+            return;
+        }
+
         try {
-            await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'attendance'), {
+            await addDoc(collection(db, 'attendance'), {
                 timestamp: serverTimestamp(),
-                dateString: new Date().toLocaleDateString(),
+                dateString: getTodayDateString(),
                 userName: user.displayName,
                 userId: user.uid,
                 ipAddress: currentIP,
                 method: 'qr_verified',
-                qrCodeUsed: dailyCode.code
+                qrCodeUsed: dailyCode.code,
+                networkVerified: currentIP === allowedSchoolIP
             });
         } catch (error) {
             console.error(error);
@@ -145,9 +190,9 @@ const AttendanceMarker = ({ user, currentIP, allowedSchoolIP }) => {
         if (!confirm("Reset attendance to test scanning again?")) return;
         setResetting(true);
         try {
-            const today = new Date().toLocaleDateString();
+            const today = getTodayDateString();
             const q = query(
-                collection(db, 'artifacts', APP_ID, 'public', 'data', 'attendance'),
+                collection(db, 'attendance'),
                 where('userId', '==', user.uid),
                 where('dateString', '==', today)
             );
@@ -205,30 +250,71 @@ const AttendanceMarker = ({ user, currentIP, allowedSchoolIP }) => {
 
             {status === 'idle' && (
                 <>
+                    {/* Warning: Not on school WiFi */}
+                    {allowedSchoolIP && currentIP !== allowedSchoolIP && (
+                        <div className="w-full bg-red-50 border border-red-200 p-4 rounded-xl mb-6 text-center">
+                            <p className="text-red-700 font-bold mb-1">🚫 Not on School WiFi</p>
+                            <p className="text-xs text-red-600">
+                                You must be connected to school WiFi to mark attendance.<br />
+                                Your IP: <span className="font-mono">{currentIP}</span><br />
+                                Required: <span className="font-mono">{allowedSchoolIP}</span>
+                            </p>
+                        </div>
+                    )}
+
+                    {!dailyCode && (
+                        <div className="w-full bg-yellow-50 border border-yellow-200 p-4 rounded-xl mb-6 text-center">
+                            <p className="text-yellow-700 font-medium mb-1">⏳ Waiting for Today's QR Code</p>
+                            <p className="text-xs text-yellow-600">
+                                The admin has not generated today's attendance QR code yet.<br />
+                                Please wait or ask your admin to generate the code.
+                            </p>
+                        </div>
+                    )}
                     <div className="w-full bg-blue-50 border border-blue-100 rounded-2xl p-8 mb-6 flex flex-col items-center justify-center aspect-square max-h-80 relative">
                         <QrCode className="w-32 h-32 text-blue-300 mb-4 opacity-50" />
                         <p className="text-center text-blue-800 font-medium z-10">
                             Locate the QR Code on the<br />Admin Screen
                         </p>
                     </div>
-                    <Button onClick={handleScan} className="w-full py-4 text-lg shadow-lg shadow-blue-200">
+                    <Button
+                        onClick={handleScan}
+                        disabled={!dailyCode || (allowedSchoolIP && currentIP !== allowedSchoolIP)}
+                        className="w-full py-4 text-lg shadow-lg shadow-blue-200"
+                    >
                         <Smartphone className="w-5 h-5" />
-                        Scan QR Code
+                        {!dailyCode
+                            ? 'Waiting for QR Code...'
+                            : (allowedSchoolIP && currentIP !== allowedSchoolIP)
+                                ? 'Connect to School WiFi First'
+                                : 'Scan QR Code'
+                        }
                     </Button>
                 </>
             )}
 
             {status === 'scanning' && (
-                <div className="w-full bg-black rounded-2xl overflow-hidden relative">
-                    <div id="reader" className="w-full h-64 bg-black"></div>
-                    <Button
-                        onClick={() => setStatus('idle')}
-                        variant="secondary"
-                        className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 opacity-80 hover:opacity-100"
-                    >
-                        Cancel Scan
-                    </Button>
-                </div>
+                <>
+                    <div className="w-full bg-black rounded-2xl overflow-hidden relative">
+                        <div id="reader" className="w-full h-64 bg-black"></div>
+                        <Button
+                            onClick={() => setStatus('idle')}
+                            variant="secondary"
+                            className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 opacity-80 hover:opacity-100"
+                        >
+                            Cancel Scan
+                        </Button>
+                    </div>
+                    <div className="w-full bg-blue-50 border border-blue-100 rounded-xl p-4 mt-4">
+                        <p className="text-sm font-semibold text-blue-800 mb-2">📱 Scanning Tips:</p>
+                        <ul className="text-xs text-blue-700 space-y-1 list-disc list-inside">
+                            <li>Hold your phone steady and keep the QR code in the green box</li>
+                            <li>Keep about 6-12 inches away from the screen</li>
+                            <li>Make sure there's good lighting (no glare)</li>
+                            <li>Wait a few seconds - scanning can take 2-5 seconds</li>
+                        </ul>
+                    </div>
+                </>
             )}
 
             {status === 'processing' && (

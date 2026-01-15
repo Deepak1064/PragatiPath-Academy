@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { History } from 'lucide-react';
 import { db } from '../../config/firebase';
-import { APP_ID } from '../../utils/constants';
 
 const AttendanceHistory = ({ user }) => {
     const [groupedRecords, setGroupedRecords] = useState({});
@@ -12,7 +11,7 @@ const AttendanceHistory = ({ user }) => {
         if (!user) return;
 
         const q = query(
-            collection(db, 'artifacts', APP_ID, 'public', 'data', 'attendance'),
+            collection(db, 'attendance'),
             where('userId', '==', user.uid)
         );
 

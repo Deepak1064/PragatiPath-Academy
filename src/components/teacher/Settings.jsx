@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { MapPin, RefreshCw, Loader2 } from 'lucide-react';
 import { db } from '../../config/firebase';
-import { APP_ID } from '../../utils/constants';
+import { getTodayDateString } from '../../utils/dateUtils';
 import Button from '../shared/Button';
 
 const Settings = ({ currentIP, fetchIP, user }) => {
@@ -13,9 +13,9 @@ const Settings = ({ currentIP, fetchIP, user }) => {
 
         setResetting(true);
         try {
-            const today = new Date().toLocaleDateString();
+            const today = getTodayDateString();
             const q = query(
-                collection(db, 'artifacts', APP_ID, 'public', 'data', 'attendance'),
+                collection(db, 'attendance'),
                 where('userId', '==', user.uid),
                 where('dateString', '==', today)
             );
@@ -33,10 +33,9 @@ const Settings = ({ currentIP, fetchIP, user }) => {
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-lg font-bold text-gray-800 mb-2">Debug Settings</h2>
+                <h2 className="text-lg font-bold text-gray-800 mb-2">Settings</h2>
                 <p className="text-sm text-gray-500 mb-4">
-                    Use this to spoof your current IP for testing. <br />
-                    (Note: You cannot change the School IP here anymore; only Admin can do that).
+                    View your network information and manage your attendance records.
                 </p>
             </div>
             <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 space-y-4">
@@ -49,13 +48,6 @@ const Settings = ({ currentIP, fetchIP, user }) => {
                 </div>
             </div>
             <div className="grid gap-3">
-                <Button onClick={() => { localStorage.setItem('mock_current_ip', "192.168.1.100"); fetchIP(); }}>
-                    Spoof IP to "192.168.1.100"
-                </Button>
-                <Button variant="secondary" onClick={() => { localStorage.removeItem('mock_current_ip'); fetchIP(); }}>
-                    Reset to Real IP
-                </Button>
-                <div className="h-px bg-gray-200 my-2"></div>
                 <Button variant="danger" onClick={handleResetAttendance} disabled={resetting}>
                     {resetting ? <Loader2 className="animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                     Reset Today's Attendance

@@ -5,13 +5,6 @@ export const useIPAddress = () => {
 
     const fetchIP = useCallback(async () => {
         try {
-            // Check for mocked IP first (for testing)
-            const mockIP = localStorage.getItem('mock_current_ip');
-            if (mockIP) {
-                setCurrentIP(mockIP);
-                return;
-            }
-
             // Fetch real IP from API
             const response = await fetch('https://api.ipify.org?format=json');
             const data = await response.json();

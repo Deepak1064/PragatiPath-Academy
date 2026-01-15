@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../../config/firebase';
-import { APP_ID } from '../../utils/constants';
+import { getTodayDateString } from '../../utils/dateUtils';
 
 const AdminDailyReport = () => {
     const [records, setRecords] = useState([]);
 
     useEffect(() => {
-        const today = new Date().toLocaleDateString();
+        const today = getTodayDateString();
         const q = query(
-            collection(db, 'artifacts', APP_ID, 'public', 'data', 'attendance'),
+            collection(db, 'attendance'),
             orderBy('timestamp', 'desc'),
             limit(100)
         );

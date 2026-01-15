@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Globe, MapPin, ShieldCheck, Lock, Loader2 } from 'lucide-react';
 import { db } from '../../config/firebase';
-import { APP_ID } from '../../utils/constants';
 import Button from '../shared/Button';
 
 const AdminNetworkConfig = ({ currentIP, allowedSchoolIP }) => {
@@ -11,7 +10,7 @@ const AdminNetworkConfig = ({ currentIP, allowedSchoolIP }) => {
     const setIP = async () => {
         setSaving(true);
         try {
-            await setDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'network_config'), {
+            await setDoc(doc(db, 'settings', 'network_config'), {
                 schoolIP: currentIP,
                 updatedAt: serverTimestamp()
             });

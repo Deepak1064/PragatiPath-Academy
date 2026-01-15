@@ -25,7 +25,6 @@ A modern, secure, and efficient attendance tracking system built with React, Fir
 ### 🌐 Network Security
 - **IP Whitelisting**: Restrict attendance marking to school network only
 - **Network Validation**: Automatic IP verification before attendance submission
-- **Debug Mode**: IP spoofing for testing purposes
 
 ### 📊 Attendance Tracking
 - **Daily Reports**: View today's attendance at a glance
@@ -181,11 +180,9 @@ npm run preview
 4. **View Confirmation** - attendance marked successfully
 5. **Check History** - review past attendance records
 
-### Debug/Testing
+### Testing
 
-Teachers can use the **Settings** tab to:
-- Spoof IP address for testing
-- Reset today's attendance to test scanning again
+Teachers can use the **Settings** tab to reset today's attendance and test the QR scanning feature again.
 
 ---
 
