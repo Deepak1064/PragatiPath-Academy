@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { LogOut, QrCode, History, Wifi } from 'lucide-react';
+import { LogOut, QrCode, History, Wifi, User } from 'lucide-react';
 import { SCHOOL_NAME } from '../../utils/constants';
 import NavButton from './NavButton';
 import NetworkStatusBanner from './NetworkStatusBanner';
 import AttendanceMarker from './AttendanceMarker';
 import AttendanceHistory from './AttendanceHistory';
 import Settings from './Settings';
+import TeacherProfile from './TeacherProfile';
 
 const TeacherDashboard = ({ user, onLogout, currentIP, allowedSchoolIP, fetchIP }) => {
     const [activeTab, setActiveTab] = useState('mark');
@@ -40,6 +41,9 @@ const TeacherDashboard = ({ user, onLogout, currentIP, allowedSchoolIP, fetchIP 
                     {activeTab === 'history' && (
                         <AttendanceHistory user={user} />
                     )}
+                    {activeTab === 'profile' && (
+                        <TeacherProfile user={user} />
+                    )}
                     {activeTab === 'settings' && (
                         <Settings
                             currentIP={currentIP}
@@ -50,9 +54,10 @@ const TeacherDashboard = ({ user, onLogout, currentIP, allowedSchoolIP, fetchIP 
                 </div>
             </div>
 
-            <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-3 flex justify-between items-center z-20 max-w-md mx-auto">
+            <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-3 flex justify-around items-center z-20 max-w-md mx-auto">
                 <NavButton icon={<QrCode />} label="Attend" isActive={activeTab === 'mark'} onClick={() => setActiveTab('mark')} />
                 <NavButton icon={<History />} label="History" isActive={activeTab === 'history'} onClick={() => setActiveTab('history')} />
+                <NavButton icon={<User />} label="Profile" isActive={activeTab === 'profile'} onClick={() => setActiveTab('profile')} />
                 <NavButton icon={<Wifi />} label="Settings" isActive={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
             </div>
         </div>
@@ -60,3 +65,4 @@ const TeacherDashboard = ({ user, onLogout, currentIP, allowedSchoolIP, fetchIP 
 };
 
 export default TeacherDashboard;
+
