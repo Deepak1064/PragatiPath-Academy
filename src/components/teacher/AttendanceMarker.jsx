@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, orderBy, limit, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, getDocs } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, getDocs, getDoc } from 'firebase/firestore';
 import { Html5Qrcode } from 'html5-qrcode';
-import { QrCode, CheckCircle, Loader2, WifiOff, Smartphone, RefreshCw, LogIn, LogOut, Clock } from 'lucide-react';
+import { QrCode, CheckCircle, Loader2, WifiOff, Smartphone, RefreshCw, LogIn, LogOut, Clock, AlertTriangle } from 'lucide-react';
 import { db } from '../../config/firebase';
 import { getTodayDateString } from '../../utils/dateUtils';
 import Button from '../shared/Button';
@@ -15,6 +15,7 @@ const AttendanceMarker = ({ user, currentIP, allowedSchoolIP }) => {
     const [cameraPermissionError, setCameraPermissionError] = useState(false);
     const [resetting, setResetting] = useState(false);
     const [attendanceType, setAttendanceType] = useState(null); // 'arrival' or 'leaving'
+    const [isLate, setIsLate] = useState(false);
 
     useEffect(() => {
         const qCode = query(
@@ -136,6 +137,7 @@ const AttendanceMarker = ({ user, currentIP, allowedSchoolIP }) => {
 
     const processAttendance = async () => {
         setStatus('processing');
+        setIsLate(false);
 
         if (allowedSchoolIP && currentIP !== allowedSchoolIP) {
             setStatus('error');
@@ -144,6 +146,44 @@ const AttendanceMarker = ({ user, currentIP, allowedSchoolIP }) => {
         }
 
         try {
+            // Check if arrival is late
+            let lateStatus = false;
+            if (attendanceType === 'arrival') {
+                let arrivalTime = null;
+                let graceMinutes = 15;
+
+                // First check for personalized timing in teacher profile
+                const profileDoc = await getDoc(doc(db, 'teacher_profiles', user.uid));
+                if (profileDoc.exists()) {
+                    const profile = profileDoc.data();
+                    if (profile.customArrivalTime) {
+                        arrivalTime = profile.customArrivalTime;
+                    }
+                }
+
+                // Fallback to school-wide settings if no personalized timing
+                if (!arrivalTime) {
+                    const settingsDoc = await getDoc(doc(db, 'settings', 'holidays'));
+                    if (settingsDoc.exists()) {
+                        const settings = settingsDoc.data();
+                        arrivalTime = settings.arrivalTime || '09:00';
+                        graceMinutes = settings.graceMinutes ?? 15;
+                    }
+                }
+
+                // Calculate if late
+                if (arrivalTime) {
+                    const [arrivalHour, arrivalMin] = arrivalTime.split(':').map(Number);
+                    const maxArrivalMinutes = arrivalHour * 60 + arrivalMin + graceMinutes;
+
+                    const now = new Date();
+                    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+                    lateStatus = currentMinutes > maxArrivalMinutes;
+                    setIsLate(lateStatus);
+                }
+            }
+
             await addDoc(collection(db, 'attendance'), {
                 timestamp: serverTimestamp(),
                 dateString: getTodayDateString(),
@@ -153,7 +193,8 @@ const AttendanceMarker = ({ user, currentIP, allowedSchoolIP }) => {
                 method: 'qr_verified',
                 qrCodeUsed: dailyCode.code,
                 networkVerified: currentIP === allowedSchoolIP,
-                type: attendanceType // 'arrival' or 'leaving'
+                type: attendanceType, // 'arrival' or 'leaving'
+                isLate: attendanceType === 'arrival' ? lateStatus : false
             });
             setStatus('success');
         } catch (error) {
@@ -236,13 +277,16 @@ const AttendanceMarker = ({ user, currentIP, allowedSchoolIP }) => {
 
                     {/* Status Cards */}
                     <div className="w-full grid grid-cols-2 gap-4 mb-6">
-                        <div className={`p-4 rounded-xl border-2 ${arrivalRecord ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
+                        <div className={`p-4 rounded-xl border-2 ${arrivalRecord?.isLate ? 'bg-orange-50 border-orange-200' : arrivalRecord ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
                             <div className="flex items-center gap-2 mb-2">
-                                <LogIn className={`w-5 h-5 ${arrivalRecord ? 'text-green-600' : 'text-gray-400'}`} />
-                                <span className={`font-semibold ${arrivalRecord ? 'text-green-700' : 'text-gray-600'}`}>Arrival</span>
+                                <LogIn className={`w-5 h-5 ${arrivalRecord?.isLate ? 'text-orange-600' : arrivalRecord ? 'text-green-600' : 'text-gray-400'}`} />
+                                <span className={`font-semibold ${arrivalRecord?.isLate ? 'text-orange-700' : arrivalRecord ? 'text-green-700' : 'text-gray-600'}`}>Arrival</span>
+                                {arrivalRecord?.isLate && (
+                                    <span className="text-xs bg-orange-200 text-orange-700 px-1.5 py-0.5 rounded font-medium">Late</span>
+                                )}
                             </div>
                             {arrivalRecord ? (
-                                <p className="text-lg font-bold text-green-600">
+                                <p className={`text-lg font-bold ${arrivalRecord?.isLate ? 'text-orange-600' : 'text-green-600'}`}>
                                     {arrivalRecord.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                 </p>
                             ) : (
@@ -351,13 +395,20 @@ const AttendanceMarker = ({ user, currentIP, allowedSchoolIP }) => {
 
             {status === 'success' && (
                 <div className="py-10 flex flex-col items-center text-center animate-in fade-in zoom-in duration-500">
-                    <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-6 ${attendanceType === 'arrival' ? 'bg-green-100' : 'bg-orange-100'
+                    <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-6 ${isLate ? 'bg-orange-100' : attendanceType === 'arrival' ? 'bg-green-100' : 'bg-orange-100'
                         }`}>
-                        <CheckCircle className={`w-12 h-12 ${attendanceType === 'arrival' ? 'text-green-600' : 'text-orange-600'}`} />
+                        {isLate ? (
+                            <AlertTriangle className="w-12 h-12 text-orange-600" />
+                        ) : (
+                            <CheckCircle className={`w-12 h-12 ${attendanceType === 'arrival' ? 'text-green-600' : 'text-orange-600'}`} />
+                        )}
                     </div>
                     <h2 className="text-2xl font-bold text-gray-800">
                         {attendanceType === 'arrival' ? 'Arrival' : 'Leaving'} Marked!
                     </h2>
+                    {isLate && attendanceType === 'arrival' && (
+                        <p className="text-orange-600 font-medium mt-2">⚠️ Marked as Late</p>
+                    )}
                     <p className="text-gray-500 mt-2">Redirecting...</p>
                 </div>
             )}

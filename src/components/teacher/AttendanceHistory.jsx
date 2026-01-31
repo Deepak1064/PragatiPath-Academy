@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
-import { History, LogIn, LogOut } from 'lucide-react';
+import { History, LogIn, LogOut, AlertTriangle } from 'lucide-react';
 import { db } from '../../config/firebase';
 
 const AttendanceHistory = ({ user }) => {
@@ -75,11 +75,30 @@ const AttendanceHistory = ({ user }) => {
         return date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
     };
 
+    // Calculate total late days
+    const totalLateDays = Object.values(groupedRecords)
+        .flat()
+        .filter(r => r.arrival?.isLate).length;
+
     return (
         <div>
-            <h2 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
+            <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <History className="w-5 h-5 text-blue-600" /> My Attendance
             </h2>
+
+            {/* Late Days Count Banner */}
+            {totalLateDays > 0 && (
+                <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-6 flex items-center gap-3">
+                    <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
+                        <AlertTriangle className="w-5 h-5 text-orange-600" />
+                    </div>
+                    <div>
+                        <p className="font-bold text-orange-700">Late Days: {totalLateDays}</p>
+                        <p className="text-xs text-orange-600">Total days you arrived late</p>
+                    </div>
+                </div>
+            )}
+
             {months.length === 0 && (
                 <div className="text-center text-gray-400 py-10">No attendance records yet</div>
             )}
@@ -97,13 +116,18 @@ const AttendanceHistory = ({ user }) => {
                                 key={dayRecord.date}
                                 className={`px-4 py-3 flex items-center justify-between ${index !== groupedRecords[month].length - 1 ? 'border-b border-gray-100' : ''}`}
                             >
-                                <p className="font-medium text-gray-800 text-sm min-w-[90px]">
-                                    {formatDate(dayRecord.date)}
-                                </p>
+                                <div className="flex items-center gap-2">
+                                    <p className="font-medium text-gray-800 text-sm min-w-[90px]">
+                                        {formatDate(dayRecord.date)}
+                                    </p>
+                                    {dayRecord.arrival?.isLate && (
+                                        <span className="text-xs bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded font-medium">Late</span>
+                                    )}
+                                </div>
                                 <div className="flex items-center gap-4">
                                     <div className="flex items-center gap-1">
-                                        <LogIn className={`w-3 h-3 ${dayRecord.arrival ? 'text-green-600' : 'text-gray-300'}`} />
-                                        <span className={`text-xs font-semibold ${dayRecord.arrival ? 'text-green-600' : 'text-gray-400'}`}>
+                                        <LogIn className={`w-3 h-3 ${dayRecord.arrival?.isLate ? 'text-orange-600' : dayRecord.arrival ? 'text-green-600' : 'text-gray-300'}`} />
+                                        <span className={`text-xs font-semibold ${dayRecord.arrival?.isLate ? 'text-orange-600' : dayRecord.arrival ? 'text-green-600' : 'text-gray-400'}`}>
                                             {formatTime(dayRecord.arrival)}
                                         </span>
                                     </div>

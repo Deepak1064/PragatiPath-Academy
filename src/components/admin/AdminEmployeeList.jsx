@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, onSnapshot, query, orderBy, doc, setDoc, deleteDoc, serverTimestamp, getDocs, where, getDoc } from 'firebase/firestore';
-import { User, Phone, Mail, Briefcase, Calendar, GraduationCap, ChevronRight, Search, Loader2, X, ArrowLeft, Plus, Edit, Trash2, Save, Camera, LogIn, LogOut } from 'lucide-react';
+import { collection, onSnapshot, query, orderBy, doc, setDoc, deleteDoc, serverTimestamp, getDocs, where, getDoc, updateDoc } from 'firebase/firestore';
+import { User, Phone, Mail, Briefcase, Calendar, GraduationCap, ChevronRight, Search, Loader2, X, ArrowLeft, Plus, Edit, Trash2, Save, Camera, LogIn, LogOut, Clock, AlertTriangle } from 'lucide-react';
 import { db } from '../../config/firebase';
 import Button from '../shared/Button';
 
@@ -179,7 +179,10 @@ const EmployeeForm = ({ employee, onClose, existingIds }) => {
         dateOfJoining: employee?.dateOfJoining || '',
         currentClasses: employee?.currentClasses || '',
         // For new employees, also need email to link account
-        email: employee?.email || ''
+        email: employee?.email || '',
+        // Personalized timing
+        customArrivalTime: employee?.customArrivalTime || '',
+        customLeavingTime: employee?.customLeavingTime || ''
     });
 
     const handleChange = (e) => {
@@ -336,6 +339,29 @@ const EmployeeForm = ({ employee, onClose, existingIds }) => {
                     </div>
                 </div>
 
+                {/* Personalized Work Schedule */}
+                <div className="bg-purple-50 border border-purple-100 rounded-lg p-4 mt-4">
+                    <h4 className="text-sm font-semibold text-purple-800 mb-3 flex items-center gap-2">
+                        <Clock className="w-4 h-4" />
+                        Personalized Work Schedule
+                    </h4>
+                    <p className="text-xs text-purple-600 mb-3">Leave empty to use school default timing</p>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Arrival Time</label>
+                            <input type="time" name="customArrivalTime" value={formData.customArrivalTime} onChange={handleChange}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Leaving Time</label>
+                            <input type="time" name="customLeavingTime" value={formData.customLeavingTime} onChange={handleChange}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                            />
+                        </div>
+                    </div>
+                </div>
+
                 <Button onClick={handleSave} disabled={saving} className="w-full py-3">
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                     {saving ? 'Saving...' : (employee ? 'Update Details' : 'Add Employee')}
@@ -351,6 +377,24 @@ const EmployeeDetail = ({ employee, onBack, onEdit }) => {
     const [loadingAttendance, setLoadingAttendance] = useState(true);
     const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
     const [holidaySettings, setHolidaySettings] = useState({ weeklyOffs: [0], holidays: [] });
+    const [togglingLate, setTogglingLate] = useState(null); // Track which record is being toggled
+
+    // Function to toggle late status
+    const handleToggleLate = async (record) => {
+        if (!record?.id) return;
+        setTogglingLate(record.id);
+        try {
+            await updateDoc(doc(db, 'attendance', record.id), {
+                isLate: !record.isLate
+            });
+            // Refresh attendance data
+            fetchAttendance();
+        } catch (error) {
+            console.error('Error toggling late status:', error);
+            alert('Failed to update late status');
+        }
+        setTogglingLate(null);
+    };
 
     useEffect(() => {
         fetchHolidaySettings();
@@ -620,11 +664,16 @@ const EmployeeDetail = ({ employee, onBack, onEdit }) => {
                                         .sort((a, b) => b[0].localeCompare(a[0]))
                                         .map(([dateStr, data]) => (
                                             <div key={dateStr} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                                <span className="text-sm font-medium text-gray-700">{dateStr}</span>
-                                                <div className="flex gap-4">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm font-medium text-gray-700">{dateStr}</span>
+                                                    {data.arrival?.isLate && (
+                                                        <span className="text-xs bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded font-medium">Late</span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-3">
                                                     <div className="flex items-center gap-1">
-                                                        <LogIn className={`w-3 h-3 ${data.arrival ? 'text-green-600' : 'text-gray-300'}`} />
-                                                        <span className={`text-xs font-semibold ${data.arrival ? 'text-green-600' : 'text-gray-400'}`}>
+                                                        <LogIn className={`w-3 h-3 ${data.arrival?.isLate ? 'text-orange-600' : data.arrival ? 'text-green-600' : 'text-gray-300'}`} />
+                                                        <span className={`text-xs font-semibold ${data.arrival?.isLate ? 'text-orange-600' : data.arrival ? 'text-green-600' : 'text-gray-400'}`}>
                                                             {data.arrival?.timestamp?.toDate ? data.arrival.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
                                                         </span>
                                                     </div>
@@ -634,6 +683,26 @@ const EmployeeDetail = ({ employee, onBack, onEdit }) => {
                                                             {data.leaving?.timestamp?.toDate ? data.leaving.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
                                                         </span>
                                                     </div>
+                                                    {/* Late Toggle Button */}
+                                                    {data.arrival && (
+                                                        <button
+                                                            onClick={() => handleToggleLate(data.arrival)}
+                                                            disabled={togglingLate === data.arrival.id}
+                                                            className={`text-xs px-2 py-1 rounded font-medium transition-colors ${data.arrival.isLate
+                                                                    ? 'bg-green-100 text-green-600 hover:bg-green-200'
+                                                                    : 'bg-orange-100 text-orange-600 hover:bg-orange-200'
+                                                                }`}
+                                                            title={data.arrival.isLate ? 'Remove late status (for emergency)' : 'Mark as late'}
+                                                        >
+                                                            {togglingLate === data.arrival.id ? (
+                                                                <Loader2 className="w-3 h-3 animate-spin" />
+                                                            ) : data.arrival.isLate ? (
+                                                                '✓ Remove Late'
+                                                            ) : (
+                                                                '⚠ Mark Late'
+                                                            )}
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </div>
                                         ));

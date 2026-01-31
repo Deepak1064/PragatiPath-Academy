@@ -131,9 +131,14 @@ const AdminDailyReport = ({ onViewEmployee }) => {
                                             </button>
                                         </td>
                                         <td className="px-6 py-4 text-center">
-                                            <span className={`font-semibold ${data.arrival ? 'text-green-600' : 'text-gray-300'}`}>
-                                                {formatTime(data.arrival)}
-                                            </span>
+                                            <div className="flex items-center justify-center gap-1">
+                                                <span className={`font-semibold ${data.arrival?.isLate ? 'text-orange-600' : data.arrival ? 'text-green-600' : 'text-gray-300'}`}>
+                                                    {formatTime(data.arrival)}
+                                                </span>
+                                                {data.arrival?.isLate && (
+                                                    <span className="text-xs bg-orange-100 text-orange-600 px-1 py-0.5 rounded font-medium">Late</span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4 text-center">
                                             <span className={`font-semibold ${data.leaving ? 'text-orange-600' : 'text-gray-300'}`}>
@@ -141,7 +146,11 @@ const AdminDailyReport = ({ onViewEmployee }) => {
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            {data.arrival && data.leaving ? (
+                                            {data.arrival?.isLate ? (
+                                                <span className="text-orange-600 bg-orange-50 px-2 py-1 rounded-md text-xs font-medium border border-orange-100">
+                                                    Late
+                                                </span>
+                                            ) : data.arrival && data.leaving ? (
                                                 <span className="text-green-600 bg-green-50 px-2 py-1 rounded-md text-xs font-medium border border-green-100">
                                                     Complete
                                                 </span>
